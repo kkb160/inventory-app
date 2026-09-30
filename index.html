@@ -92,7 +92,14 @@ function addJan(raw){
  if(!loc){$("status").textContent="先にロケーションを入力してください。";return}
  const key=loc+"|"+jan;
  let item=items.get(key);
- if(item){item.qty+=1}else{item={location:loc,jan,qty:1};items.set(key,item)}
+ if(item){
+  item.qty+=1;
+  items.delete(key);
+  items.set(key,item);
+ }else{
+  item={location:loc,jan,qty:1};
+  items.set(key,item);
+ }
  lastAddedKey=key;render();
  $("manualJan").value="";
  $("status").textContent=`${jan}：数量 ${item.qty}（棚 ${loc}）`;
@@ -309,7 +316,7 @@ $("exportBtn").onclick=()=>{
    `${p.date},${hhmm},${p.ss},${storeCode},${storeNo},${x.location},${x.jan},0,${x.qty}`
  );
  const text=lines.join("\r\n")+"\r\n";
- const filename=`棚卸_${p.date}_${hhmm}${p.ss}.txt`;
+ const filename=`棚卸_${p.date}_${currentLocation()}.txt`;
 
  // まず確認画面。その後「TXTを保存」または「コピー」が選べる。
  confirmBox(
