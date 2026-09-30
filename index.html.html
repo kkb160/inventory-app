@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>スマホ棚卸 試作版 2</title>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<style>
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;margin:0;background:#f3f6fa;color:#172033}
+.wrap{max-width:720px;margin:auto;padding:14px}h1{font-size:22px;margin:4px 0 14px}.card{background:#fff;border-radius:14px;padding:15px;margin-bottom:12px;box-shadow:0 2px 10px #0001}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}input,button{font:inherit}input{width:100%;padding:12px;border:1px solid #ccd4df;border-radius:9px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}button{border:0;border-radius:10px;padding:12px 14px;font-weight:700;cursor:pointer}.primary{background:#1769aa;color:#fff;width:100%;font-size:17px}.secondary{background:#e8eef5;color:#172033}.danger{background:#fbe7e7;color:#a21b1b}.success{background:#16834b;color:#fff}
+#reader{width:100%;overflow:hidden;border-radius:10px}.status{padding:10px;border-radius:9px;background:#eef5ff;font-size:13px;margin-top:9px}
+.big{font-size:28px;font-weight:800;text-align:center;padding:5px 0}.row{display:flex;align-items:center;gap:10px;border-top:1px solid #e7ebf0;padding:11px 0}.row:first-child{border-top:0}
+.jan{font-family:ui-monospace,monospace;font-size:15px}.qtybox{display:flex;align-items:center;gap:5px;margin-left:auto}.qtybox button{width:42px;height:42px;padding:0;font-size:22px}.qtyinput{width:72px;text-align:center;font-weight:800;font-size:19px;padding:8px}.small{font-size:12px;color:#64748b}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.hidden{display:none!important}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}.tabs button.active{background:#1769aa;color:white}.historyItem{padding:12px;border-top:1px solid #e7ebf0;display:flex;justify-content:space-between;gap:8px}.historyItem:first-child{border-top:0}
+.modal{position:fixed;inset:0;background:#0008;display:flex;align-items:flex-end;justify-content:center;z-index:10}.modalbox{background:#fff;width:min(720px,100%);border-radius:18px 18px 0 0;padding:18px}.modalBtns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.notice{font-size:12px;color:#5b6472;line-height:1.55}.tag{display:inline-block;background:#edf2f7;border-radius:999px;padding:3px 8px;font-size:12px;margin-right:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📱 スマホ棚卸・試作版</h1>
+
+<div class="tabs">
+<button id="workTab" class="active">棚卸</button>
+<button id="historyTab" class="secondary">履歴</button>
+</div>
+
+<section id="workView">
+<div class="card">
+<div class="grid">
+<div><label>店舗番号</label><input id="storeNo" value="211" inputmode="numeric"></div>
+<div><label>店舗コード</label><input id="storeCode" value="21101" inputmode="numeric"></div>
+</div>
+<div style="margin-top:10px"><label>ロケーション（棚番号）</label><input id="location" value="9" inputmode="numeric"></div>
+</div>
+
+<div class="card">
+<button class="primary" id="startBtn">📷 JANコードをカメラで読み取る</button>
+<div id="scannerBox" class="hidden" style="margin-top:12px"><div id="reader"></div><button class="secondary" id="stopBtn" style="width:100%;margin-top:10px">カメラを停止</button></div>
+<div class="status" id="status">JANを読み取ると数量が1増えます。同じJANは数量が加算されます。</div>
+</div>
+
+<div class="card">
+<label>カメラが使えない場合：JANを手入力</label>
+<div style="display:flex;gap:8px"><input id="manualJan" inputmode="numeric" maxlength="13" placeholder="13桁のJANコード"><button class="secondary" id="addBtn">追加</button></div>
+</div>
+
+<div class="card">
+<div class="small">現在の棚卸</div><div class="big" id="total">0個 / 0商品</div><div id="list"></div>
+</div>
+
+<div class="card">
+<div class="actions"><button class="secondary" id="undoBtn">↩ 最後を取り消す</button><button class="danger" id="clearBtn">全消去</button></div>
+<button class="primary" id="exportBtn" style="margin-top:10px">📄 棚卸ファイルを書き出す</button>
+<p class="notice">出力：日付,時,秒,店舗コード,店舗番号,ロケーション,JAN,在庫区分,数量<br>在庫区分は「0」で固定します。出力後は確認してから削除できます。</p>
+</div>
+</section>
+
+<section id="historyView" class="hidden">
+<div class="card">
+<div style="font-weight:800">保存された棚卸履歴</div>
+<div class="notice" style="margin-top:6px">この端末のブラウザ内に保存しています。</div>
+<div id="historyList" style="margin-top:8px"></div>
+</div>
+</section>
+</div>
+
+<div id="modal" class="modal hidden">
+<div class="modalbox">
+<div id="modalTitle" style="font-size:19px;font-weight:800"></div>
+<div id="modalText" style="margin-top:8px;line-height:1.6"></div>
+<div class="modalBtns">
+<button class="secondary" id="modalCancel">キャンセル</button>
+<button class="success" id="modalOk">OK</button>
+</div>
+</div>
+</div>
+
+<script>
+let scanner=null,lastScan="",lastScanAt=0,items=new Map(),lastAddedKey=null;
+const $=id=>document.getElementById(id);
+
+function normalizeJan(v){return(v||"").replace(/\D/g,"").trim()}
+function currentLocation(){return $("location").value.trim()}
+
+function addJan(raw){
+ const jan=normalizeJan(raw),loc=currentLocation();
+ if(!jan){return}
+ if(jan.length!==13){$("status").textContent="JANコードは13桁で入力してください。";return}
+ if(!loc){$("status").textContent="先にロケーションを入力してください。";return}
+ const key=loc+"|"+jan;
+ let item=items.get(key);
+ if(item){item.qty+=1}else{item={location:loc,jan,qty:1};items.set(key,item)}
+ lastAddedKey=key;render();
+ $("manualJan").value="";
+ $("status").textContent=`${jan}：数量 ${item.qty}（棚 ${loc}）`;
+}
+
+function render(){
+ let total=0;[...items.values()].forEach(x=>total+=x.qty);
+ $("total").textContent=`${total}個 / ${items.size}商品`;
+ $("list").innerHTML=items.size?[...items.values()].map((x,i)=>`
+ <div class="row">
+  <div style="min-width:0;flex:1"><div class="jan">${x.jan}</div><div class="small">棚 ${esc(x.location)}</div></div>
+  <div class="qtybox">
+   <button class="secondary" onclick="changeQty('${keyEsc(x.location+"|"+x.jan)}',-1)">−</button>
+   <input class="qtyinput" type="number" min="0" value="${x.qty}" onchange="setQty('${keyEsc(x.location+"|"+x.jan)}',this.value)">
+   <button class="secondary" onclick="changeQty('${keyEsc(x.location+"|"+x.jan)}',1)">＋</button>
+  </div>
+ </div>`).join(""):'<div class="small" style="padding:15px 0">まだ商品がありません。</div>';
+ saveDraft();
+}
+function keyEsc(s){return encodeURIComponent(s)}
+function keyDec(s){return decodeURIComponent(s)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function changeQty(k,d){k=keyDec(k);const x=items.get(k);if(!x)return;x.qty+=d;if(x.qty<=0)items.delete(k);lastAddedKey=k;render()}
+function setQty(k,v){k=keyDec(k);const x=items.get(k);if(!x)return;const n=Math.max(0,parseInt(v,10)||0);if(n===0)items.delete(k);else x.qty=n;render()}
+
+function saveDraft(){
+ const data={storeNo:$("storeNo").value,storeCode:$("storeCode").value,location:$("location").value,items:[...items.values()]};
+ localStorage.setItem("inventoryDraft",JSON.stringify(data));
+}
+function loadDraft(){
+ try{
+  const d=JSON.parse(localStorage.getItem("inventoryDraft")||"null");if(!d)return;
+  $("storeNo").value=d.storeNo||"211";$("storeCode").value=d.storeCode||"21101";$("location").value=d.location||"9";
+  items=new Map((d.items||[]).map(x=>[x.location+"|"+x.jan,x]));
+ }catch(e){}
+ render();
+}
+function saveHistory(record){
+ const h=JSON.parse(localStorage.getItem("inventoryHistory")||"[]");h.unshift(record);localStorage.setItem("inventoryHistory",JSON.stringify(h.slice(0,50)));
+}
+function renderHistory(){
+ const h=JSON.parse(localStorage.getItem("inventoryHistory")||"[]");
+ $("historyList").innerHTML=h.length?h.map((r,i)=>`
+ <div class="historyItem"><div><b>${esc(r.dateTime)}</b><br><span class="tag">店舗 ${esc(r.storeNo)}</span><span class="tag">棚 ${esc(r.location)}</span><div class="small">${r.products}商品 / ${r.total}個</div></div>
+ <button class="secondary" onclick="restoreHistory(${i})">戻す</button></div>`).join(""):'<div class="small" style="padding:15px 0">履歴はありません。</div>';
+}
+function restoreHistory(i){
+ const h=JSON.parse(localStorage.getItem("inventoryHistory")||"[]"),r=h[i];if(!r)return;
+ items=new Map((r.items||[]).map(x=>[x.location+"|"+x.jan,{...x}]));
+ $("storeNo").value=r.storeNo;$("storeCode").value=r.storeCode;$("location").value=r.location;
+ render();showWork();$("status").textContent="履歴から復元しました。内容を確認して続けられます。";
+}
+
+$("addBtn").onclick=()=>addJan($("manualJan").value);
+$("manualJan").addEventListener("keydown",e=>{if(e.key==="Enter")addJan(e.target.value)});
+$("location").addEventListener("change",saveDraft);$("storeNo").addEventListener("change",saveDraft);$("storeCode").addEventListener("change",saveDraft);
+
+$("startBtn").onclick=async()=>{
+ $("scannerBox").classList.remove("hidden");
+ try{
+  scanner=new Html5Qrcode("reader");
+  await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:280,height:120}},decoded=>{
+   const n=Date.now();if(decoded===lastScan&&n-lastScanAt<1200)return;lastScan=decoded;lastScanAt=n;addJan(decoded)
+  },()=>{});
+  $("status").textContent="カメラ起動中。JANコードを枠に合わせてください。";
+ }catch(e){$("status").textContent="カメラを起動できませんでした。HTTPSで開くか、手入力を使用してください。";$("scannerBox").classList.add("hidden")}
+};
+$("stopBtn").onclick=async()=>{if(scanner){try{await scanner.stop()}catch(e){}try{scanner.clear()}catch(e){}scanner=null}$("scannerBox").classList.add("hidden")};
+
+$("undoBtn").onclick=()=>{
+ if(!lastAddedKey)return;$key=lastAddedKey;const x=items.get($key);if(!x)return;
+ if(x.qty>1)x.qty--;else items.delete($key);render();$("status").textContent="最後の追加を1個取り消しました。";
+};
+$("clearBtn").onclick=()=>confirmBox("現在の棚卸データをすべて消去します。","全消去",()=>{items.clear();lastAddedKey=null;render();$("status").textContent="データを消去しました。"});
+
+function nowParts(){
+ const n=new Date(),date=`${n.getFullYear()}${String(n.getMonth()+1).padStart(2,"0")}${String(n.getDate()).padStart(2,"0")}`;
+ return {date,hh:String(n.getHours()).padStart(2,"0"),ss:String(n.getSeconds()).padStart(2,"0"),dt:n.toLocaleString("ja-JP")};
+}
+let pendingExport=null;
+
+function showExportPreview(text, filename, meta){
+ pendingExport={text,filename,...meta};
+ $("modalTitle").textContent="TXT出力内容";
+ $("modalText").innerHTML=`
+   <div style="font-size:14px;line-height:1.6;margin-bottom:8px">
+     <b>ファイル名：</b>${esc(filename)}<br>
+     <b>商品数：</b>${meta.products}　<b>合計数量：</b>${meta.total}
+   </div>
+   <textarea id="exportText" readonly style="width:100%;height:230px;box-sizing:border-box;font-family:monospace;font-size:12px;line-height:1.5;padding:10px">${esc(text)}</textarea>
+   <div style="font-size:12px;line-height:1.5;margin-top:8px">
+     内容を確認できます。まず「コピー」を押すこともできます。
+   </div>`;
+ $("modal").classList.remove("hidden");
+ $("modalOk").textContent="TXTを保存";
+ $("modalCancel").textContent="コピー";
+ $("modalOk").onclick=saveExportFile;
+ $("modalCancel").onclick=copyExportText;
+}
+
+async function copyExportText(){
+ const el=document.getElementById("exportText");
+ if(!el || !pendingExport)return;
+ try{
+  await navigator.clipboard.writeText(pendingExport.text);
+  $("status").textContent="TXT内容をコピーしました。";
+  $("modalText").insertAdjacentHTML("beforeend",
+   '<div style="margin-top:8px;padding:8px;border-radius:8px;background:#e9f7ef;color:#176b3a">✓ コピーしました</div>');
+ }catch(e){
+  el.focus();el.select();
+  try{
+   document.execCommand("copy");
+   $("status").textContent="TXT内容をコピーしました。";
+  }catch(e2){
+   $("status").textContent="コピーできませんでした。TXT内容を選択してコピーしてください。";
+  }
+ }
+}
+
+async function saveExportFile(){
+ if(!pendingExport)return;
+ const {text,filename,p,storeNo,storeCode,total,products}=pendingExport;
+
+ // まず File System Access API を試す
+ try{
+  if(window.showSaveFilePicker && window.isSecureContext){
+   const handle=await window.showSaveFilePicker({
+    suggestedName:filename,
+    types:[{description:"棚卸TXT",accept:{"text/plain":[".txt"]}}]
+   });
+   const writable=await handle.createWritable();
+   await writable.write("\ufeff"+text);
+   await writable.close();
+   finishExport();
+   return;
+  }
+ }catch(e){
+  if(e && e.name==="AbortError")return;
+ }
+
+ // 通常のダウンロード
+ try{
+  const blob=new Blob(["\ufeff"+text],{type:"text/plain;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download=filename;
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  finishExport();
+ }catch(e){
+  alert("自動保存ができませんでした。『コピー』で内容をコピーして保存できます。");
+ }
+}
+
+function finishExport(){
+ if(!pendingExport)return;
+ const {p,storeNo,storeCode,total,products}=pendingExport;
+ saveHistory({
+  dateTime:p.dt,
+  storeNo,
+  storeCode,
+  location:currentLocation(),
+  products,
+  total,
+  items:[...items.values()].map(x=>({...x}))
+ });
+ $("modalTitle").textContent="出力完了";
+ $("modalText").innerHTML=`
+   <div style="font-size:16px;line-height:1.7">
+     <b>${products}商品 / ${total}個</b> を出力しました。
+   </div>
+   <div style="margin-top:10px;font-size:13px;line-height:1.6">
+     ファイル名：${esc(pendingExport.filename)}
+   </div>
+   <div style="margin-top:14px;font-size:14px">
+     出力済みデータをこの端末から削除しますか？
+   </div>`;
+ $("modalOk").textContent="削除する";
+ $("modalCancel").textContent="残す";
+ $("modalOk").onclick=()=>{
+  items.clear();
+  lastAddedKey=null;
+  localStorage.removeItem("inventoryDraft");
+  $("modal").classList.add("hidden");
+  render();
+  $("status").textContent="出力済みデータを削除しました。次の棚へ進めます。";
+  pendingExport=null;
+ };
+ $("modalCancel").onclick=()=>{
+  $("modal").classList.add("hidden");
+  render();
+  $("status").textContent="ファイルを出力しました。データは端末に残しています。";
+  pendingExport=null;
+ };
+}
+
+$("exportBtn").onclick=()=>{
+ if(!items.size){alert("棚卸データがありません。");return}
+ const p=nowParts();
+ const now=new Date();
+ const storeNo=$("storeNo").value.trim();
+ const storeCode=$("storeCode").value.trim();
+ const hhmm=`${p.hh}${String(now.getMinutes()).padStart(2,"0")}`;
+ let total=0;
+ [...items.values()].forEach(x=>total+=x.qty);
+
+ // 既存システム形式：
+ // 日付,時分,秒,店舗コード,店舗番号,棚番号,JAN,区分,数量
+ const lines=[...items.values()].map(x=>
+   `${p.date},${hhmm},${p.ss},${storeCode},${storeNo},${x.location},${x.jan},0,${x.qty}`
+ );
+ const text=lines.join("\r\n")+"\r\n";
+ const filename=`棚卸_${p.date}_${hhmm}${p.ss}.txt`;
+
+ // まず確認画面。その後「TXTを保存」または「コピー」が選べる。
+ confirmBox(
+  `店舗：${esc(storeNo)}<br>棚：${esc(currentLocation())}<br>${items.size}商品 / ${total}個<br><br>この内容でTXTを作成しますか？`,
+  "出力確認",
+  ()=>{
+   showExportPreview(text,filename,{
+    p,storeNo,storeCode,total,products:items.size
+   });
+  }
+ );
+};
+
+function confirmBox(text,title,ok,cancel=()=>{}){
+ $("modalTitle").textContent=title;$("modalText").innerHTML=text;$("modal").classList.remove("hidden");
+ const okb=$("modalOk"),cb=$("modalCancel");okb.onclick=()=>{$("modal").classList.add("hidden");ok()};cb.onclick=()=>{$("modal").classList.add("hidden");cancel()};
+}
+function showWork(){$("workView").classList.remove("hidden");$("historyView").classList.add("hidden");$("workTab").classList.add("active");$("historyTab").classList.remove("active")}
+$("workTab").onclick=showWork;
+$("historyTab").onclick=()=>{$("workView").classList.add("hidden");$("historyView").classList.remove("hidden");$("workTab").classList.remove("active");$("historyTab").classList.add("active");renderHistory()};
+
+loadDraft();
+</script>
+</body>
+</html>
